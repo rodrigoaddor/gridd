@@ -1,0 +1,13 @@
+@use 'sass:color'
+@use '@material/theme/color-palette' as colors
+  
+body
+  background-color: color.adjust(colors.$blue-grey-500, $lightness: -35%)
+  color: color.adjust(#fff, $lightness: -10%)
+
+*
+  margin: 0
+  padding: 0
+
+*, *:before, *:after
+  box-sizing: border-box

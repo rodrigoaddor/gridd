@@ -1,6 +1,10 @@
 <script lang="ts" context="module">
   export type LineCallback = (lineIndex: number) => void;
   export type SquareData = boolean;
+  export enum Player {
+    A,
+    B,
+  }
 
   enum ElementType {
     DOT = 'dot',
@@ -8,15 +12,23 @@
     VERTICAL_LINE = 'vertical-line',
     SQUARE = 'square',
   }
+
+  interface ElementData {
+    type: ElementType;
+    owner?: Player;
+    handler?: () => void;
+  }
 </script>
 
 <script lang="ts">
   export let size: [number, number];
 
-  export let lines: boolean[];
-  export let squares: boolean[];
+  export let lines: (Player | null)[];
+  export let squares: (Player | null)[];
 
-  let elements: { type: ElementType; active: boolean; handler?: () => void }[];
+  export let player: Player;
+
+  let elements: ElementData[];
 
   const getElementType = (col: number, line: number): ElementType => {
     if (col % 2 == 0 && line % 2 == 0) return ElementType.DOT;
@@ -119,33 +131,35 @@
     let lineIndex = 0;
     let squareIndex = 0;
 
-    elements = Array.from({ length: (size[0] * 2 + 1) * (size[1] * 2 + 1) }, (_, i) => {
+    elements = Array.from<number, ElementData>({ length: (size[0] * 2 + 1) * (size[1] * 2 + 1) }, (_, i) => {
       const col = i % (size[0] * 2 + 1);
       const line = Math.floor(i / (size[0] * 2 + 1));
 
       const type = getElementType(col, line);
-      let active = false;
+      let owner: Player | undefined;
       let handler: (() => void) | undefined;
 
       if (type === ElementType.VERTICAL_LINE || type === ElementType.HORIZONTAL_LINE) {
         let thisLineIndex = lineIndex++;
-        active = lines[thisLineIndex];
-        lines[thisLineIndex] ??= false;
+        owner = lines[thisLineIndex];
+        lines[thisLineIndex] ??= null;
         handler = () => {
           // set clicked line to active
-          lines[thisLineIndex] = true;
+          lines[thisLineIndex] = player;
+
+          let squareFilled = false;
 
           // verify if a square can be activated
           getRelatedSquares(thisLineIndex).forEach(({ square, lines: relatedLines }) => {
-            if (relatedLines.every((line) => lines[line])) {
-              squares[square] = true;
+            if (relatedLines.every((line) => lines[line] !== null)) {
+              squares[square] = player;
+              squareFilled = true;
             }
           });
 
-          // getRelatedSquares(thisLineIndex).forEach(({ square, lines: relatedLines }) => {
-          //   squares[square] = true;
-          //   relatedLines.forEach((line) => (lines[line] = true));
-          // });
+          if (!squareFilled) {
+            player = player === Player.A ? Player.B : Player.A;
+          }
 
           // trigger updates if needed
           squares = squares;
@@ -153,11 +167,11 @@
         };
       } else if (type === ElementType.SQUARE) {
         let thisSquareIndex = squareIndex++;
-        active = squares[thisSquareIndex];
-        squares[thisSquareIndex] ??= false;
+        owner = squares[thisSquareIndex];
+        squares[thisSquareIndex] ??= null;
       }
 
-      return { type, active, handler };
+      return { type, owner, handler };
     });
   }
 
@@ -167,8 +181,8 @@
 
   $: {
     if (size.join('x') !== oldSize.join('x')) {
-      lines = Array.from({ length: lines.length }, () => false);
-      squares = Array.from({ length: squares.length }, () => false);
+      lines = Array.from({ length: lines.length }, () => null);
+      squares = Array.from({ length: squares.length }, () => null);
       oldSize = size;
     }
   }
@@ -179,12 +193,23 @@
     {#each elements as item, index}
       {#if item.type === ElementType.DOT}
         <div class="dot" />
-      {:else if item.type === ElementType.HORIZONTAL_LINE}
-        <div class="line horizontal hoverable" class:active={item.active} on:click={item.handler} />
-      {:else if item.type === ElementType.VERTICAL_LINE}
-        <div class="line vertical hoverable" class:active={item.active} on:click={item.handler} />
+      {:else if item.type === ElementType.HORIZONTAL_LINE || item.type === ElementType.VERTICAL_LINE}
+        <div
+          class="line hoverable"
+          class:horizontal={item.type === ElementType.HORIZONTAL_LINE}
+          class:vertical={item.type === ElementType.VERTICAL_LINE}
+          class:active={item.owner !== null}
+          class:player-a={item.owner === Player.A}
+          class:player-b={item.owner === Player.B}
+          on:click={item.handler}
+        />
       {:else}
-        <div class="square" class:active={item.active} />
+        <div
+          class="square"
+          class:active={item.owner !== null}
+          class:player-a={item.owner === Player.A}
+          class:player-b={item.owner === Player.B}
+        />
       {/if}
     {/each}
   </div>
@@ -193,29 +218,36 @@
 <style lang="sass">
   @use '@material/theme/color-palette' as palette
 
-  :root
-    --thickness: 4px
-    --grid-color: white
+  $thickness: .25rem
+  $grid-color: white
+  $player-a: palette.$red-500
+  $player-b: palette.$blue-500
 
   .wrapper
     display: grid
-    grid-template-columns: repeat(var(--columns), 1rem 4rem) 1rem
-    grid-template-rows: repeat(var(--rows), 1rem 4rem) 1rem
-    margin: 2rem
+    grid-template-columns: repeat(var(--columns), 16px 64px) 16px
+    grid-template-rows: repeat(var(--rows), 16px 64px) 16px
+    margin: 32px
     place-items: center
 
   .dot
-    height: var(--thickness)
-    width: var(--thickness)
-    background-color: var(--grid-color)
+    height: $thickness
+    width: $thickness
+    background-color: $grid-color
     border-radius: 50%
 
   .line
     &::after
       display: block
-      border-radius: var(--thickness)
-      background-color: var(--grid-color)
+      border-radius: $thickness
+      background-color: $grid-color
       content: ' '
+
+    &.player-a::after
+      background-color: $player-a
+    
+    &.player-b::after
+      background-color: $player-b
 
     &.horizontal, &.vertical
       display: grid
@@ -224,11 +256,11 @@
       width: 100%
 
     &.horizontal::after
-      height: var(--thickness)
+      height: $thickness
       width: 100%
     
     &.vertical::after
-      width: var(--thickness)
+      width: $thickness
       height: 100%
 
     &.hoverable
@@ -243,9 +275,12 @@
       pointer-events: none
     
   .square
-    min-width: 4rem
+    min-width: 64px
     aspect-ratio: 1/1
 
-    &.active
-      background-color: transparentize(palette.$light-blue-500, 0.5)
+    &.active.player-a
+      background-color: $player-a
+    
+    &.active.player-b
+      background-color: $player-b
 </style>

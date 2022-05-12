@@ -4,7 +4,7 @@
 
   import TextField from '@smui/textfield';
 
-  import GridLines from './components/GridLines.svelte';
+  import GridLines, { Player } from './components/GridLines.svelte';
 
   let topAppBar: TopAppBarComponentDev;
 
@@ -52,8 +52,9 @@
     }
   };
 
-  let squares: boolean[] = [];
-  let lines: boolean[] = [];
+  let squares: (Player | null)[] = [];
+  let lines: (Player | null)[] = [];
+  let player: Player = Player.A;
 </script>
 
 <template>
@@ -77,7 +78,7 @@
     </Row>
   </TopAppBar>
   <AutoAdjust {topAppBar}>
-    <GridLines bind:size bind:squares bind:lines />
+    <GridLines bind:size bind:squares bind:lines bind:player />
   </AutoAdjust>
 </template>
 
